@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Payment form · secure checkout</title>
   <style>
-    /* ----- GLOBAL RESET & BASE (matches PetFindr's clean slate) ----- */
+    /* ----- GLOBAL RESET & BASE ----- */
     * {
       margin: 0;
       padding: 0;
@@ -14,7 +14,7 @@
     }
 
     body {
-      background: #f8fafc; /* slate-50 */
+      background: #f8fafc;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -22,13 +22,13 @@
       padding: 1.5rem;
     }
 
-    /* ----- CARD CONTAINER — mirrors PetFindr's rounded-2xl border white card ----- */
+    /* ----- CARD CONTAINER ----- */
     .payment-card {
       max-width: 560px;
       width: 100%;
       background: #ffffff;
-      border-radius: 1rem;           /* rounded-2xl */
-      border: 1px solid #e2e8f0;     /* border-slate-200 */
+      border-radius: 1rem;
+      border: 1px solid #e2e8f0;
       padding: 2rem;
       box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
     }
@@ -62,6 +62,36 @@
       color: #64748b;
       font-size: 0.875rem;
       margin-top: 0.25rem;
+    }
+
+    /* ----- SERVICE FEE NOTICE ----- */
+    .fee-notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .fee-notice svg {
+      width: 18px;
+      height: 18px;
+      fill: #b45309;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .fee-notice p {
+      font-size: 0.875rem;
+      color: #78350f;
+      line-height: 1.5;
+    }
+
+    .fee-notice strong {
+      font-weight: 700;
     }
 
     /* ----- FORM LAYOUT ----- */
@@ -136,6 +166,32 @@
 
     .cvv-group {
       flex: 0.7 0.7 0 !important;
+    }
+
+    /* ----- ORDER SUMMARY ----- */
+    .order-summary {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-top: 0.25rem;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      color: #334155;
+      padding: 0.25rem 0;
+    }
+
+    .summary-row.total {
+      border-top: 1px solid #e2e8f0;
+      margin-top: 0.5rem;
+      padding-top: 0.75rem;
+      font-weight: 700;
+      color: #0f172a;
+      font-size: 1rem;
     }
 
     /* ----- SECURE NOTE ----- */
@@ -247,7 +303,18 @@
         Payment details
         <span>secure</span>
       </h2>
-      <p>All fields are required.</p>
+      <p>All fields are required · test mode</p>
+    </div>
+
+    <!-- Service fee notice -->
+    <div class="fee-notice">
+      <svg viewBox="0 0 24 24" width="18" height="18">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      <p>
+        <strong>Service fee notice:</strong> A one‑time <strong>$0.17 service fee</strong> is required
+        to verify and process your report. This fee covers secure payment handling and server verification.
+      </p>
     </div>
 
     <form class="payment-form" id="paymentForm" action="#" method="post" novalidate>
@@ -278,6 +345,22 @@
         </div>
       </div>
 
+      <!-- Order summary -->
+      <div class="order-summary">
+        <div class="summary-row">
+          <span>Verification report</span>
+          <span>$0.00</span>
+        </div>
+        <div class="summary-row">
+          <span>Service fee</span>
+          <span>$0.17</span>
+        </div>
+        <div class="summary-row total">
+          <span>Total due today</span>
+          <span>$0.17</span>
+        </div>
+      </div>
+
       <div class="secure-note">
         <svg viewBox="0 0 24 24" width="18" height="18">
           <path d="M12 1C8.676 1 6 3.676 6 7v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V11c0-1.1-.9-2-2-2h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v2H8V7c0-2.276 1.724-4 4-4zm0 11c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2z"/>
@@ -289,7 +372,7 @@
       </div>
 
       <button type="submit" class="pay-button">
-        Pay now
+        Pay $0.17 now
         <svg viewBox="0 0 24 24" width="18" height="18">
           <path d="M5 12h14M13 5l7 7-7 7" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -300,7 +383,7 @@
   <script>
     document.getElementById('paymentForm').addEventListener('submit', function(e) {
       e.preventDefault();
-      alert('Demo mode · no payment processed.');
+      alert('Demo mode · no payment processed.\nService fee: $0.17');
     });
   </script>
 </body>
